@@ -51,6 +51,15 @@ export function startNextPlateAppearance(state: GameState, rules: EffectiveGameR
 
   lineup.nextBatterIndex = (lineup.nextBatterIndex + 1) % len;
 
+  let skipped = 0;
+  while (
+    lineup.slots[lineup.nextBatterIndex].occupants.length === 0 &&
+    skipped < len
+  ) {
+    lineup.nextBatterIndex = (lineup.nextBatterIndex + 1) % len;
+    skipped++;
+  }
+
   const slot = lineup.slots[lineup.nextBatterIndex];
   const occ = slot.occupants[slot.activeOccupantIndex];
   if (occ?.playerId) {

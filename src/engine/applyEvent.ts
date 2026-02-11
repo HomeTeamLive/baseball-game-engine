@@ -308,6 +308,71 @@ export function applyEvent(state: GameState, rules: EffectiveGameRules, event: G
       next.gameStatus = "IN_PROGRESS";
       return { ok: true, state: next, statsDelta };
 
+    case "LINEUP_SET": {
+      const teamSide = event.payload.teamSide;
+      const slots = event.payload.slots;
+
+      const nextSlots = Array.from({ length: 10 }, (_, i) => {
+        const slot = (i + 1) as any;
+        const found = Array.isArray(slots) ? slots.find((s: any) => s?.slot === slot) : undefined;
+        return {
+          slot,
+          activeOccupantIndex: 0,
+          occupants: found
+            ? [
+                {
+                  playerId: found.player_id,
+                  enteredEventId: event.eventId,
+                  subType: "NONE" as const,
+                  role: "STARTER" as const,
+                  position: found.position ?? null,
+                },
+              ]
+            : [],
+        };
+      });
+
+      next.teams[teamSide].lineup.slots = nextSlots as any;
+      next.teams[teamSide].lineup.nextBatterIndex = 0;
+
+      if (teamSide === next.offense && (!next.pa.batter.playerId || next.pa.batter.playerId === "_")) {
+        const p0 = (nextSlots[0]?.occupants?.[0] as any)?.playerId;
+        if (typeof p0 === "string" && p0.length) {
+          next.pa.batter = { teamSide, slot: 1, playerId: p0 } as any;
+        }
+      }
+
+      return { ok: true, state: next, statsDelta };
+    }
+
+    case "DEFENSE_SET": {
+      const teamSide = event.payload.teamSide;
+      const defensePatch = event.payload.defense ?? {};
+
+      const current = next.teams[teamSide].onField.defense as any;
+      for (const [pos, pid] of Object.entries(defensePatch)) {
+        if (typeof pid === "string") current[pos] = pid;
+      }
+
+      // P  pitcher
+      const pitcherId = current["P"];
+      if (typeof pitcherId === "string" && pitcherId.length && pitcherId !== "_") {
+        if (!next.teams[teamSide].onField.pitchers.length) {
+          next.teams[teamSide].onField.pitchers.push({ playerId: pitcherId, enteredEventId: event.eventId } as any);
+        } else {
+          next.teams[teamSide].onField.pitchers[0].playerId = pitcherId;
+        }
+      }
+
+      if (teamSide === next.defense && (!next.pa.pitcherId || next.pa.pitcherId === "_")) {
+        if (typeof pitcherId === "string" && pitcherId.length) {
+          next.pa.pitcherId = pitcherId;
+        }
+      }
+
+      return { ok: true, state: next, statsDelta };
+    }
+
     case "GAME_PAUSED":
       next.gameStatus = "PAUSED";
       return { ok: true, state: next, statsDelta };

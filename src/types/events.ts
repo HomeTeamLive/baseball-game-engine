@@ -8,6 +8,8 @@ export type EventName =
   | "GAME_PAUSED"
   | "GAME_RESUMED"
   | "GAME_FINAL"
+  | "LINEUP_SET"
+  | "DEFENSE_SET"
   | "INNING_ADVANCE"
   | "AT_BAT_START"
   | "PITCH"
@@ -46,6 +48,22 @@ export interface AtBatStartPayload {
   pa_id: string;
   batter_id: PlayerId;
   pitcher_id: PlayerId;
+}
+
+export interface LineupSetSlot {
+  slot: number;
+  player_id: PlayerId;
+  position?: DefensePos | null;
+}
+
+export interface LineupSetPayload {
+  teamSide: TeamSide;
+  slots: LineupSetSlot[];
+}
+
+export interface DefenseSetPayload {
+  teamSide: TeamSide;
+  defense: Partial<Record<DefensePos, PlayerId>>;
 }
 
 export interface InningAdvancePayload {
@@ -178,6 +196,9 @@ export type GameEvent =
   | GameEventBase<"GAME_PAUSED", {}>
   | GameEventBase<"GAME_RESUMED", {}>
   | GameEventBase<"GAME_FINAL", {}>
+
+  | GameEventBase<"LINEUP_SET", LineupSetPayload>
+  | GameEventBase<"DEFENSE_SET", DefenseSetPayload>
 
   | GameEventBase<"INNING_ADVANCE", InningAdvancePayload>
   | GameEventBase<"AT_BAT_START", AtBatStartPayload>

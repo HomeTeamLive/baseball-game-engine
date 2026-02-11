@@ -19,6 +19,9 @@ const SUPPORTED_EVENTS = new Set<GameEvent["name"]>([
   "GAME_RESUMED",
   "GAME_FINAL",
 
+  "LINEUP_SET",
+  "DEFENSE_SET",
+
   "AT_BAT_START",
   "INNING_ADVANCE",
 
@@ -231,13 +234,117 @@ export function validateEvent(state: GameState, rules: EffectiveGameRules, event
   }
 
   if (!event.eventId || typeof event.eventId !== "string") err(errors, "event.eventId must be a string");
+  //lineupset on pre game statu
+  if (
+    state.gameStatus === "PRE_GAME" &&
+    event.name !== "GAME_STARTED" &&
+    event.name !== "GAME_FINAL" &&
+    event.name !== "LINEUP_SET" &&
+    event.name !== "DEFENSE_SET"
+  ) {
+    return { ok: false, errors: [`Event '${event.name}' is not allowed while gameStatus is PRE_GAME`] };
+  }
 
   if (
     event.name === "GAME_STARTED" ||
     event.name === "GAME_PAUSED" ||
     event.name === "GAME_RESUMED" ||
-    event.name === "GAME_FINAL"
+    event.name === "GAME_FINAL" 
+    
   ) {
+    return { ok: errors.length === 0, errors };
+  }
+
+  if (event.name === "LINEUP_SET") {
+    requireKeys(errors, event.payload, ["teamSide", "slots"], "LINEUP_SET.payload");
+
+    const teamSide = (event.payload as any)?.teamSide;
+    const slots = (event.payload as any)?.slots;
+
+    if (teamSide !== "HOME" && teamSide !== "AWAY") {
+      err(errors, "LINEUP_SET: teamSide must be 'HOME' or 'AWAY'");
+      return { ok: errors.length === 0, errors };
+    }
+
+    if (!Array.isArray(slots)) {
+      err(errors, "LINEUP_SET: slots must be an array");
+      return { ok: errors.length === 0, errors };
+    }
+
+    const seenSlots = new Set<number>();
+    const seenPlayers = new Set<string>();
+
+    for (const s of slots) {
+      requireKeys(errors, s, ["slot", "player_id"], "LINEUP_SET.slots[]");
+
+      const slot = (s as any)?.slot;
+      const playerId = (s as any)?.player_id;
+
+      if (typeof slot !== "number" || slot < 1 || slot > 10) err(errors, `LINEUP_SET: invalid slot '${slot}' (must be 1..10)`);
+      if (typeof playerId !== "string") err(errors, "LINEUP_SET: player_id must be a string");
+
+      if (typeof slot === "number") {
+        if (seenSlots.has(slot)) err(errors, `LINEUP_SET: duplicate slot '${slot}'`);
+        seenSlots.add(slot);
+      }
+
+      if (typeof playerId === "string") {
+        if (seenPlayers.has(playerId)) err(errors, `LINEUP_SET: duplicate player_id '${playerId}' in lineup`);
+        seenPlayers.add(playerId);
+
+        if (!isOnRoster(state, teamSide, playerId)) {
+          err(errors, `LINEUP_SET: player_id '${playerId}' is not on ${teamSide} roster`);
+        }
+      }
+    }
+
+    for (let i = 1; i <= 9; i++) {
+      if (!seenSlots.has(i)) err(errors, `LINEUP_SET: missing required starter slot '${i}'`);
+    }
+
+    return { ok: errors.length === 0, errors };
+  }
+
+  if (event.name === "DEFENSE_SET") {
+    requireKeys(errors, event.payload, ["teamSide", "defense"], "DEFENSE_SET.payload");
+
+    const teamSide = (event.payload as any)?.teamSide;
+    const defense = (event.payload as any)?.defense;
+
+    if (teamSide !== "HOME" && teamSide !== "AWAY") {
+      err(errors, "DEFENSE_SET: teamSide must be 'HOME' or 'AWAY'");
+      return { ok: errors.length === 0, errors };
+    }
+
+    if (defense === null || typeof defense !== "object" || Array.isArray(defense)) {
+      err(errors, "DEFENSE_SET: defense must be an object mapping positions -> playerId");
+      return { ok: errors.length === 0, errors };
+    }
+
+    const REQUIRED: DefensePos[] = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"];
+    const seenPlayers = new Set<string>();
+
+    for (const pos of REQUIRED) {
+      const pid = (defense as any)?.[pos];
+      if (typeof pid !== "string" || !pid.length) {
+        err(errors, `DEFENSE_SET: missing required position '${pos}'`);
+        continue;
+      }
+
+      if (!isOnRoster(state, teamSide, pid)) {
+        err(errors, `DEFENSE_SET: player '${pid}' at ${pos} is not on ${teamSide} roster`);
+      }
+
+      if (seenPlayers.has(pid)) err(errors, `DEFENSE_SET: player '${pid}' assigned to multiple fielding positions`);
+      seenPlayers.add(pid);
+    }
+
+    const dhPid = (defense as any)?.["DH"];
+    if (dhPid !== undefined) {
+      if (typeof dhPid !== "string") err(errors, "DEFENSE_SET: DH must be a string if provided");
+      else if (!isOnRoster(state, teamSide, dhPid)) err(errors, `DEFENSE_SET: DH '${dhPid}' is not on ${teamSide} roster`);
+    }
+
     return { ok: errors.length === 0, errors };
   }
 

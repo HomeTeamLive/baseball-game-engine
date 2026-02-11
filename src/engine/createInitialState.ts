@@ -11,6 +11,7 @@ import type {
 import type { EffectiveGameRules } from "../types/gameRules";
 
 const DEF_POS: DefensePos[] = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH"];
+const UNSET_PLAYER: PlayerId = "_";
 
 function isoNow() {
   return new Date().toISOString();
@@ -20,29 +21,21 @@ function otherSide(side: TeamSide): TeamSide {
   return side === "HOME" ? "AWAY" : "HOME";
 }
 
-function makeDefense(roster: PlayerId[]): Record<DefensePos, PlayerId> {
+function makeDefense(): Record<DefensePos, PlayerId> {
   const defense = {} as Record<DefensePos, PlayerId>;
   DEF_POS.forEach((pos, idx) => {
-    defense[pos] = roster[idx] ?? `${pos}_player`;
+    defense[pos] = UNSET_PLAYER;
   });
   return defense;
 }
 
-function makeLineupSlots(roster: PlayerId[]) {
+function makeLineupSlots() {
   return Array.from({ length: 10 }, (_, i) => {
     const slot = (i + 1) as LineupSlotNumber;
-    const playerId = roster[i] ?? `player_${slot}`;
     return {
       slot,
       activeOccupantIndex: 0,
-      occupants: [
-        {
-          playerId,
-          subType: "NONE" as const,
-          role: "STARTER" as const,
-          position: null,
-        },
-      ],
+      occupants: [],
     };
   });
 }
@@ -72,16 +65,16 @@ export function createInitialState(args: {
   const offenseFirst = args.offenseFirst ?? "AWAY";
   const defenseFirst = otherSide(offenseFirst);
 
-  const homeDefense = makeDefense(args.homeRoster);
-  const awayDefense = makeDefense(args.awayRoster);
+  const homeDefense = makeDefense();
+  const awayDefense = makeDefense();
 
   const pitcherId = defenseFirst === "HOME" ? homeDefense["P"] : awayDefense["P"];
 
-  const homeLineupSlots = makeLineupSlots(args.homeRoster);
-  const awayLineupSlots = makeLineupSlots(args.awayRoster);
+  const homeLineupSlots = makeLineupSlots();
+  const awayLineupSlots = makeLineupSlots();
 
   const offenseLineupSlots = offenseFirst === "HOME" ? homeLineupSlots : awayLineupSlots;
-  const batterId = offenseLineupSlots[0]?.occupants[0]?.playerId ?? `${offenseFirst}_batter_1`;
+  const batterId = '_';
 
   return {
     version: 1,
