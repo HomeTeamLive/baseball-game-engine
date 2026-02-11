@@ -1,0 +1,71 @@
+name: Publish Node Package to AWS CodeArtifact
+
+on:
+  push:
+    branches:
+      - main
+      - 'release-*'
+      - devmain
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional manual version number'
+        required: false
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::278697777641:role/GitHubAction-AssumeRoleWithAction
+          aws-region: us-east-1
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Configure AWS CodeArtifact auth
+        run: |
+          export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain iscore --domain-owner 278697777641 --query authorizationToken --output text)
+          npm config set //278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
+          npm config set registry=https://278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine environment
+        id: env
+        run: |
+          BRANCH=${GITHUB_REF##*/}
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "env=prod" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH" == release-* ]]; then
+            echo "env=staging" >> $GITHUB_OUTPUT
+          else
+            echo "env=devmain" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set version
+        id: version
+        run: |
+          VERSION_INPUT="${{ github.event.inputs.version }}"
+          if [ -z "$VERSION_INPUT" ]; then
+            VERSION=$(npm version patch --no-git-tag-version)
+          else
+            npm version $VERSION_INPUT --no-git-tag-version
+            VERSION=$VERSION_INPUT
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build package
+        run: npm run build
+
+      - name: Publish to CodeArtifact
+        run: npm publish --registry https://278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
