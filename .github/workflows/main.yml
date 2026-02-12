@@ -38,8 +38,9 @@ jobs:
       - name: Configure AWS CodeArtifact auth
         run: |
           export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain iscore --domain-owner 278697777641 --query authorizationToken --output text)
-          npm config set //278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
-          npm config set registry=https://278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+          npm config set registry=https://iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+          npm config set @iscore:registry=https://iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+          npm config set //iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
 
       - name: Install dependencies
         run: npm ci
