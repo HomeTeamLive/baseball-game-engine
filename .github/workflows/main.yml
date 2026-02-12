@@ -1,0 +1,104 @@
+name: Publish Node Package to AWS CodeArtifact
+
+on:
+  push:
+    branches:
+      - main
+      - 'release-*'
+      - devmain
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Optional manual version number'
+        required: false
+
+permissions:
+  id-token: write
+  contents: read
+  
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::278697777641:role/GitHubAction-AssumeRoleWithAction
+          aws-region: us-east-1
+
+      - name: Configure Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Configure AWS CodeArtifact auth
+        run: |
+          export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain iscore --domain-owner 278697777641 --query authorizationToken --output text)
+          npm config set //278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
+          npm config set registry=https://278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Determine environment
+        id: env
+        run: |
+          BRANCH=${GITHUB_REF##*/}
+          if [[ "$BRANCH" == "main" ]]; then
+            echo "env=prod" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH" == release-* ]]; then
+            echo "env=staging" >> $GITHUB_OUTPUT
+          else
+            echo "env=devmain" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Set version
+        id: version
+        run: |
+          ENV=${{ steps.env.outputs.env }}
+          VERSION_INPUT="${{ github.event.inputs.version }}"
+
+          echo "Checking latest version from CodeArtifact..."
+
+          LATEST=$(aws codeartifact list-package-versions \
+            --domain iscore \
+            --repository iscore-node \
+            --format npm \
+            --package @iscore/game-engine \
+            --query 'versions[0].version' \
+            --output text 2>/dev/null || echo "0.0.0")
+
+          if [ -z "$VERSION_INPUT" ]; then
+            if [ "$LATEST" == "None" ] || [ "$LATEST" == "0.0.0" ]; then
+              BASE_VERSION="0.0.1"
+            else
+              CLEAN_VERSION=$(echo $LATEST | cut -d- -f1)
+              IFS='.' read -r major minor patch <<< "$CLEAN_VERSION"
+              patch=$((patch + 1))
+              BASE_VERSION="$major.$minor.$patch"
+            fi
+
+            if [ "$ENV" == "dev" ]; then
+              NEW_VERSION="$BASE_VERSION-dev.1"
+            elif [ "$ENV" == "staging" ]; then
+              NEW_VERSION="$BASE_VERSION-rc.1"
+            else
+              NEW_VERSION="$BASE_VERSION"
+            fi
+          else
+            NEW_VERSION=$VERSION_INPUT
+          fi
+
+          echo "Publishing version: $NEW_VERSION"
+          npm version $NEW_VERSION --no-git-tag-version
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build package
+        run: npm run build
+
+      - name: Publish to CodeArtifact
+        run: npm publish --registry https://278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
