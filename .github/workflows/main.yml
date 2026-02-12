@@ -38,8 +38,10 @@ jobs:
       - name: Configure AWS CodeArtifact auth
         run: |
           export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain iscore --domain-owner 278697777641 --query authorizationToken --output text)
-          npm config set //278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
-          npm config set registry=https://278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+          npm config set registry=https://iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+          npm config set @iscore:registry=https://iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+          npm config set //iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:always-auth=true
+          npm config set //iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
 
       - name: Install dependencies
         run: npm ci
@@ -48,13 +50,18 @@ jobs:
         id: env
         run: |
           BRANCH=${GITHUB_REF##*/}
-          if [[ "$BRANCH" == "main" ]]; then
-            echo "env=prod" >> $GITHUB_OUTPUT
-          elif [[ "$BRANCH" == release-* ]]; then
-            echo "env=staging" >> $GITHUB_OUTPUT
-          else
-            echo "env=devmain" >> $GITHUB_OUTPUT
+          if [ "$BRANCH" = "main" ]; then
+          npm version patch --no-git-tag-version
+          TAG="latest"
+          elif [ "$BRANCH" = "develop" ]; then
+          npm version prerelease --preid=dev --no-git-tag-version
+          TAG="dev"
+          elif [ "$BRANCH" = "staging" ]; then
+          npm version prerelease --preid=rc --no-git-tag-version
+          TAG="rc"
           fi
+          VERSION=$(node -p "require('./package.json').version")
+          npm publish --tag $TAG
 
       - name: Set version
         id: version
