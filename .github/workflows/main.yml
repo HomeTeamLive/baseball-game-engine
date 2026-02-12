@@ -12,6 +12,10 @@ on:
         description: 'Optional manual version number'
         required: false
 
+permissions:
+  id-token: write
+  contents: read
+  
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
@@ -55,14 +59,43 @@ jobs:
       - name: Set version
         id: version
         run: |
+          ENV=${{ steps.env.outputs.env }}
           VERSION_INPUT="${{ github.event.inputs.version }}"
+
+          echo "Checking latest version from CodeArtifact..."
+
+          LATEST=$(aws codeartifact list-package-versions \
+            --domain iscore \
+            --repository iscore-node \
+            --format npm \
+            --package @iscore/game-engine \
+            --query 'versions[0].version' \
+            --output text 2>/dev/null || echo "0.0.0")
+
           if [ -z "$VERSION_INPUT" ]; then
-            VERSION=$(npm version patch --no-git-tag-version)
+            if [ "$LATEST" == "None" ] || [ "$LATEST" == "0.0.0" ]; then
+              BASE_VERSION="0.0.1"
+            else
+              CLEAN_VERSION=$(echo $LATEST | cut -d- -f1)
+              IFS='.' read -r major minor patch <<< "$CLEAN_VERSION"
+              patch=$((patch + 1))
+              BASE_VERSION="$major.$minor.$patch"
+            fi
+
+            if [ "$ENV" == "dev" ]; then
+              NEW_VERSION="$BASE_VERSION-dev.1"
+            elif [ "$ENV" == "staging" ]; then
+              NEW_VERSION="$BASE_VERSION-rc.1"
+            else
+              NEW_VERSION="$BASE_VERSION"
+            fi
           else
-            npm version $VERSION_INPUT --no-git-tag-version
-            VERSION=$VERSION_INPUT
+            NEW_VERSION=$VERSION_INPUT
           fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          echo "Publishing version: $NEW_VERSION"
+          npm version $NEW_VERSION --no-git-tag-version
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build package
         run: npm run build
