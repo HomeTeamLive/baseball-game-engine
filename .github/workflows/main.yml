@@ -71,39 +71,54 @@ jobs:
         id: version
         run: |
           ENV="${{ steps.env.outputs.env }}"
-          VERSION_INPUT="${{ github.event.inputs.version }}"
 
-          echo "Checking latest version from CodeArtifact..."
+          PACKAGE="@iscore/game-engine"
+
+          echo "Checking latest version from CodeArtifact for $PACKAGE..."
           LATEST=$(aws codeartifact list-package-versions \
             --domain iscore \
             --repository iscore-node \
             --format npm \
-            --package @iscore/game-engine \
+            --package "$PACKAGE" \
+            --sort-by PUBLISHED_TIME \
+            --max-results 1 \
             --query 'versions[0].version' \
             --output text 2>/dev/null || echo "0.0.0")
 
-          if [ -z "$VERSION_INPUT" ]; then
-            if [ "$LATEST" = "None" ] || [ "$LATEST" = "0.0.0" ]; then
-              BASE_VERSION="0.0.1"
-            else
-              CLEAN_VERSION=$(echo "$LATEST" | cut -d- -f1)
-              IFS='.' read -r major minor patch <<< "$CLEAN_VERSION"
-              patch=$((patch + 1))
-              BASE_VERSION="$major.$minor.$patch"
-            fi
-
-            if [ "$ENV" = "dev" ]; then
-              NEW_VERSION="${BASE_VERSION}-dev.1"
-            elif [ "$ENV" = "rc" ]; then
-              NEW_VERSION="${BASE_VERSION}-rc.1"
-            else
-              NEW_VERSION="$BASE_VERSION"
-            fi
+          if [ "$LATEST" = "None" ] || [ "$LATEST" = "0.0.0" ]; then
+            BASE_VERSION="0.0.1"
           else
-            NEW_VERSION="$VERSION_INPUT"
+            CLEAN_VERSION=$(echo "$LATEST" | cut -d- -f1)
+            IFS='.' read -r major minor patch <<< "$CLEAN_VERSION"
+            patch=$((patch + 1))
+            BASE_VERSION="$major.$minor.$patch"
           fi
 
-          echo "Publishing version: $NEW_VERSION"
+          next_prerelease () {
+            base="$1"      # e.g. 0.0.2
+            pre="$2"       # dev or rc
+            latest="$3"    # e.g. 0.0.1-rc.1
+
+            # If latest matches base-pre.N then increment N, else start at 1
+            if echo "$latest" | grep -qE "^${base}-${pre}\.[0-9]+$"; then
+              n=$(echo "$latest" | sed -E "s/^${base}-${pre}\.([0-9]+)$/\1/")
+              n=$((n + 1))
+            else
+              n=1
+            fi
+
+            echo "${base}-${pre}.${n}"
+          }
+
+          if [ "$ENV" = "dev" ]; then
+            NEW_VERSION=$(next_prerelease "$BASE_VERSION" "dev" "$LATEST")
+          elif [ "$ENV" = "rc" ]; then
+            NEW_VERSION=$(next_prerelease "$BASE_VERSION" "rc" "$LATEST")
+          else
+            NEW_VERSION="$BASE_VERSION"
+          fi
+
+          echo "Publishing version: $NEW_VERSION (latest seen: $LATEST)"
           npm version "$NEW_VERSION" --no-git-tag-version
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
