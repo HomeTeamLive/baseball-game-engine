@@ -318,49 +318,6 @@ export function validateEvent(state: GameState, rules: EffectiveGameRules, event
     return { ok: errors.length === 0, errors };
   }
 
-  if (event.name === "DEFENSE_SET") {
-    requireKeys(errors, event.payload, ["teamSide", "defense"], "DEFENSE_SET.payload");
-
-    const teamSide = (event.payload as any)?.teamSide;
-    const defense = (event.payload as any)?.defense;
-
-    if (teamSide !== "HOME" && teamSide !== "AWAY") {
-      err(errors, "DEFENSE_SET: teamSide must be 'HOME' or 'AWAY'");
-      return { ok: errors.length === 0, errors };
-    }
-
-    if (defense === null || typeof defense !== "object" || Array.isArray(defense)) {
-      err(errors, "DEFENSE_SET: defense must be an object mapping positions -> playerId");
-      return { ok: errors.length === 0, errors };
-    }
-
-    const REQUIRED: DefensePos[] = ["P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF"];
-    const seenPlayers = new Set<string>();
-
-    for (const pos of REQUIRED) {
-      const pid = (defense as any)?.[pos];
-      if (typeof pid !== "string" || !pid.length) {
-        err(errors, `DEFENSE_SET: missing required position '${pos}'`);
-        continue;
-      }
-
-      if (!isOnRoster(state, teamSide, pid)) {
-        err(errors, `DEFENSE_SET: player '${pid}' at ${pos} is not on ${teamSide} roster`);
-      }
-
-      if (seenPlayers.has(pid)) err(errors, `DEFENSE_SET: player '${pid}' assigned to multiple fielding positions`);
-      seenPlayers.add(pid);
-    }
-
-    const dhPid = (defense as any)?.["DH"];
-    if (dhPid !== undefined) {
-      if (typeof dhPid !== "string") err(errors, "DEFENSE_SET: DH must be a string if provided");
-      else if (!isOnRoster(state, teamSide, dhPid)) err(errors, `DEFENSE_SET: DH '${dhPid}' is not on ${teamSide} roster`);
-    }
-
-    return { ok: errors.length === 0, errors };
-  }
-
   if (event.name === "AT_BAT_START") {
     requireKeys(errors, event.payload, ["pa_id", "batter_id", "pitcher_id"], "AT_BAT_START.payload");
 
