@@ -2,27 +2,23 @@
   "name": "@iscore/game-engine",
   "version": "1.0.2",
   "type": "module",
-
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-
   "exports": {
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     }
   },
-
   "files": [
     "dist"
   ],
-
   "scripts": {
     "build": "tsc",
     "prepublishOnly": "npm run build"
   },
-
   "devDependencies": {
+    "@types/node": "^20.19.33",
     "typescript": "~5.9.3"
   }
 }
