@@ -38,6 +38,21 @@ export function resetCountForNewPa(state: GameState, rules: EffectiveGameRules) 
   state.pa.pitchCountInPa = 0;
 }
 
+function setCurrentBatterFromLineup(state: GameState) {
+  const lineup = state.teams[state.offense].lineup;
+  const len = lineup.slots.length;
+  if (len <= 0) return;
+
+  const slot = lineup.slots[lineup.nextBatterIndex];
+  const occ = slot?.occupants[slot.activeOccupantIndex];
+  if (occ?.playerId) {
+    state.pa.batter = {
+      teamSide: state.offense,
+      slot: slot.slot,
+      playerId: occ.playerId,
+    };
+  }
+}
 
 export function startNextPlateAppearance(state: GameState, rules: EffectiveGameRules) {
   const lineup = state.teams[state.offense].lineup;
@@ -170,6 +185,8 @@ export function advanceHalfInningIfNeeded(state: GameState, rules: EffectiveGame
     state.defense = "AWAY";
 
     state.pa.pitcherId = getCurrentPitcherId(state);
+    setCurrentBatterFromLineup(state);
+
     maybeApplyInternationalTieBreakerStartOfHalfInning(state, rules);
     return;
   }
@@ -200,5 +217,7 @@ export function advanceHalfInningIfNeeded(state: GameState, rules: EffectiveGame
   state.defense = "HOME";
 
   state.pa.pitcherId = getCurrentPitcherId(state);
+  setCurrentBatterFromLineup(state);
+
   maybeApplyInternationalTieBreakerStartOfHalfInning(state, rules);
 }

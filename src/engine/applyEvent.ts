@@ -333,7 +333,7 @@ export function applyEvent(state: GameState, rules: EffectiveGameRules, event: G
       });
 
       next.teams[teamSide].lineup.slots = nextSlots as any;
-      next.teams[teamSide].lineup.nextBatterIndex = 0;
+      next.teams[teamSide].lineup.nextBatterIndex  = 0;
 
       if (teamSide === next.offense && (!next.pa.batter.playerId || next.pa.batter.playerId === "_")) {
         const p0 = (nextSlots[0]?.occupants?.[0] as any)?.playerId;
@@ -342,20 +342,15 @@ export function applyEvent(state: GameState, rules: EffectiveGameRules, event: G
         }
       }
 
-      return { ok: true, state: next, statsDelta };
-    }
-
-    case "DEFENSE_SET": {
-      const teamSide = event.payload.teamSide;
-      const defensePatch = event.payload.defense ?? {};
-
-      const current = next.teams[teamSide].onField.defense as any;
-      for (const [pos, pid] of Object.entries(defensePatch)) {
-        if (typeof pid === "string") current[pos] = pid;
+      // Set defense from slot positions
+      const defense = next.teams[teamSide].onField.defense as any;
+      for (const s of slots) {
+        if (s.position && s.player_id) {
+          defense[s.position] = s.player_id;
+        }
       }
 
-      // P  pitcher
-      const pitcherId = current["P"];
+      const pitcherId = defense["P"];
       if (typeof pitcherId === "string" && pitcherId.length && pitcherId !== "_") {
         if (!next.teams[teamSide].onField.pitchers.length) {
           next.teams[teamSide].onField.pitchers.push({ playerId: pitcherId, enteredEventId: event.eventId } as any);
@@ -372,6 +367,7 @@ export function applyEvent(state: GameState, rules: EffectiveGameRules, event: G
 
       return { ok: true, state: next, statsDelta };
     }
+
 
     case "GAME_PAUSED":
       next.gameStatus = "PAUSED";
