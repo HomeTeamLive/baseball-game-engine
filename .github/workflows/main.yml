@@ -6,11 +6,7 @@ on:
       - main
       - "release-*"
       - devmain
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Optional manual version number"
-        required: false
+  workflow_dispatch: {}
 
 permissions:
   id-token: write
@@ -54,7 +50,7 @@ jobs:
             ENV="dev"
             TAG="dev"
           else
-            # release-* (o cualquier otra rama que dispare el workflow)
+            # release-* (or any other branch that triggers the workflow)
             ENV="rc"
             TAG="rc"
           fi
