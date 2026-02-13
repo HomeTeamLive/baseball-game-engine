@@ -9,7 +9,6 @@ export type EventName =
   | "GAME_RESUMED"
   | "GAME_FINAL"
   | "LINEUP_SET"
-  | "DEFENSE_SET"
   | "INNING_ADVANCE"
   | "AT_BAT_START"
   | "PITCH"
@@ -61,10 +60,6 @@ export interface LineupSetPayload {
   slots: LineupSetSlot[];
 }
 
-export interface DefenseSetPayload {
-  teamSide: TeamSide;
-  defense: Partial<Record<DefensePos, PlayerId>>;
-}
 
 export interface InningAdvancePayload {
   to_inning_number: number;
@@ -198,7 +193,6 @@ export type GameEvent =
   | GameEventBase<"GAME_FINAL", {}>
 
   | GameEventBase<"LINEUP_SET", LineupSetPayload>
-  | GameEventBase<"DEFENSE_SET", DefenseSetPayload>
 
   | GameEventBase<"INNING_ADVANCE", InningAdvancePayload>
   | GameEventBase<"AT_BAT_START", AtBatStartPayload>

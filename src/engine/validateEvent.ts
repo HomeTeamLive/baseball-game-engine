@@ -20,7 +20,6 @@ const SUPPORTED_EVENTS = new Set<GameEvent["name"]>([
   "GAME_FINAL",
 
   "LINEUP_SET",
-  "DEFENSE_SET",
 
   "AT_BAT_START",
   "INNING_ADVANCE",
@@ -239,11 +238,24 @@ export function validateEvent(state: GameState, rules: EffectiveGameRules, event
     state.gameStatus === "PRE_GAME" &&
     event.name !== "GAME_STARTED" &&
     event.name !== "GAME_FINAL" &&
-    event.name !== "LINEUP_SET" &&
-    event.name !== "DEFENSE_SET"
+    event.name !== "LINEUP_SET" 
   ) {
     return { ok: false, errors: [`Event '${event.name}' is not allowed while gameStatus is PRE_GAME`] };
   }
+
+   if (state.gameStatus === "FINAL") {
+    return { ok: false, errors: [`Event '${event.name}' is not allowed while gameStatus is FINAL`] };
+  }
+
+
+  if (
+      state.gameStatus === "PAUSED" &&
+      event.name !== "GAME_RESUMED" &&
+      event.name !== "GAME_FINAL"
+    ) {
+      return { ok: false, errors: [`Event '${event.name}' is not allowed while gameStatus is PAUSED`] };
+    }
+
 
   if (
     event.name === "GAME_STARTED" ||
@@ -271,6 +283,7 @@ export function validateEvent(state: GameState, rules: EffectiveGameRules, event
       return { ok: errors.length === 0, errors };
     }
 
+    
     const seenSlots = new Set<number>();
     const seenPlayers = new Set<string>();
 
