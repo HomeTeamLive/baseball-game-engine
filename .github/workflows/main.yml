@@ -43,7 +43,7 @@ jobs:
            npm config set //iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
     
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Determine environment
         id: env
