@@ -72,7 +72,7 @@ jobs:
         run: |
           ENV="${{ steps.env.outputs.env }}"
 
-          PACKAGE="@iscore/game-engine"
+          PACKAGE="game-engine"
 
           echo "Checking latest version from CodeArtifact for $PACKAGE..."
           LATEST=$(aws codeartifact list-package-versions \
