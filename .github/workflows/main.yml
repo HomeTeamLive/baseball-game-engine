@@ -4,18 +4,18 @@ on:
   push:
     branches:
       - main
-      - 'release-*'
+      - "release-*"
       - devmain
   workflow_dispatch:
     inputs:
       version:
-        description: 'Optional manual version number'
+        description: "Optional manual version number"
         required: false
 
 permissions:
   id-token: write
   contents: read
-  
+
 jobs:
   build-and-publish:
     runs-on: ubuntu-latest
@@ -33,47 +33,51 @@ jobs:
       - name: Configure Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: "20"   
+          cache: "npm"
 
-      - name: Configure AWS CodeArtifact auth
+      - name: Set npm registry for installs (public)
         run: |
-           export CODEARTIFACT_AUTH_TOKEN=$(aws codeartifact get-authorization-token --domain iscore --domain-owner 278697777641 --query authorizationToken --output text)
-           npm config set registry=https://iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
-           npm config set @iscore:registry=https://iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
-           npm config set //iscore-278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/:_authToken=$CODEARTIFACT_AUTH_TOKEN
-    
+          npm config set registry "https://registry.npmjs.org/"
+
       - name: Install dependencies
         run: npm install
 
-      - name: Determine environment
+      - name: Determine env & tag
         id: env
         run: |
-          BRANCH=${GITHUB_REF##*/}
+          BRANCH="${GITHUB_REF##*/}"
           if [ "$BRANCH" = "main" ]; then
-          npm version patch --no-git-tag-version
-          TAG="latest"
-          elif [ "$BRANCH" = "develop" ]; then
-          npm version prerelease --preid=dev --no-git-tag-version
-          TAG="dev"
-          elif [ "$BRANCH" = "staging" ]; then
-          npm version prerelease --preid=rc --no-git-tag-version
-          TAG="rc"
+            ENV="prod"
+            TAG="latest"
+          elif [ "$BRANCH" = "devmain" ]; then
+            ENV="dev"
+            TAG="dev"
           else
-          # feature/*, hotfix/*, etc.
-          npm version prerelease --preid=dev --no-git-tag-version
-          TAG="dev"
+            # release-* (o cualquier otra rama que dispare el workflow)
+            ENV="rc"
+            TAG="rc"
           fi
-          VERSION=$(node -p "require('./package.json').version")
-          npm publish --tag $TAG
+
+          echo "env=$ENV" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Login to AWS CodeArtifact (npm)
+        run: |
+          aws codeartifact login \
+            --tool npm \
+            --domain iscore \
+            --domain-owner 278697777641 \
+            --repository iscore-node \
+            --region us-east-1
 
       - name: Set version
         id: version
         run: |
-          ENV=${{ steps.env.outputs.env }}
+          ENV="${{ steps.env.outputs.env }}"
           VERSION_INPUT="${{ github.event.inputs.version }}"
 
           echo "Checking latest version from CodeArtifact..."
-
           LATEST=$(aws codeartifact list-package-versions \
             --domain iscore \
             --repository iscore-node \
@@ -83,32 +87,34 @@ jobs:
             --output text 2>/dev/null || echo "0.0.0")
 
           if [ -z "$VERSION_INPUT" ]; then
-            if [ "$LATEST" == "None" ] || [ "$LATEST" == "0.0.0" ]; then
+            if [ "$LATEST" = "None" ] || [ "$LATEST" = "0.0.0" ]; then
               BASE_VERSION="0.0.1"
             else
-              CLEAN_VERSION=$(echo $LATEST | cut -d- -f1)
+              CLEAN_VERSION=$(echo "$LATEST" | cut -d- -f1)
               IFS='.' read -r major minor patch <<< "$CLEAN_VERSION"
               patch=$((patch + 1))
               BASE_VERSION="$major.$minor.$patch"
             fi
 
-            if [ "$ENV" == "dev" ]; then
-              NEW_VERSION="$BASE_VERSION-dev.1"
-            elif [ "$ENV" == "staging" ]; then
-              NEW_VERSION="$BASE_VERSION-rc.1"
+            if [ "$ENV" = "dev" ]; then
+              NEW_VERSION="${BASE_VERSION}-dev.1"
+            elif [ "$ENV" = "rc" ]; then
+              NEW_VERSION="${BASE_VERSION}-rc.1"
             else
               NEW_VERSION="$BASE_VERSION"
             fi
           else
-            NEW_VERSION=$VERSION_INPUT
+            NEW_VERSION="$VERSION_INPUT"
           fi
 
           echo "Publishing version: $NEW_VERSION"
-          npm version $NEW_VERSION --no-git-tag-version
+          npm version "$NEW_VERSION" --no-git-tag-version
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Build package
         run: npm run build
 
       - name: Publish to CodeArtifact
-        run: npm publish --registry https://278697777641.d.codeartifact.us-east-1.amazonaws.com/npm/iscore-node/
+        run: |
+          TAG="${{ steps.env.outputs.tag }}"
+          npm publish --tag "$TAG"
