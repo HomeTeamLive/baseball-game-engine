@@ -58,6 +58,10 @@ jobs:
           elif [ "$BRANCH" = "staging" ]; then
           npm version prerelease --preid=rc --no-git-tag-version
           TAG="rc"
+          else
+          # feature/*, hotfix/*, etc.
+          npm version prerelease --preid=dev --no-git-tag-version
+          TAG="dev"
           fi
           VERSION=$(node -p "require('./package.json').version")
           npm publish --tag $TAG
